@@ -1,0 +1,801 @@
+"""
+TRADUCTOR DE PLANTAS INTELIGENTE
+Sistema de monitoreo y diagnóstico de plantas usando sensores y ML
+Versión 2.0 - Mejorada y Optimizada
+"""
+
+import random
+import time
+from dataclasses import dataclass
+from typing import Tuple, List, Dict, Optional, Any, Union
+from enum import Enum
+
+# Imports opcionales para funcionalidad avanzada
+try:
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import r2_score
+    LIBRERIAS_DISPONIBLES = True
+except ImportError:
+    LIBRERIAS_DISPONIBLES = False
+    print("⚠️ Librerías avanzadas no disponibles. Usando modo básico.")
+    print("Para funcionalidad completa, instala: pip install numpy pandas matplotlib scikit-learn\n")
+
+
+# ==========================================
+# CONFIGURACIÓN Y TIPOS DE DATOS
+# ==========================================
+
+class EstadoPlanta(Enum):
+    """Estados emocionales posibles de la planta"""
+    FELIZ = "Feliz 🌿"
+    TRISTE = "Triste 🥀"
+    PREOCUPADA = "Preocupada 😰"
+    ESTRESADA = "Estresada 😫"
+    CRITICA = "Estado Crítico ⚠️"
+
+
+@dataclass
+class ConfiguracionPlanta:
+    """Configuración de umbrales para diferentes tipos de plantas"""
+    nombre: str = "Planta Genérica"
+    humedad_min: float = 30.0
+    humedad_max: float = 80.0
+    temperatura_min: float = 15.0
+    temperatura_max: float = 28.0
+    luz_min: float = 20.0
+    luz_max: float = 90.0
+    umbral_sequia: float = 0.5
+    frecuencia_riego_dias: int = 7
+
+
+@dataclass
+class LecturaSensores:
+    """Estructura para almacenar lecturas de sensores"""
+    humedad_raw: int
+    luz_raw: int
+    temperatura: float
+    humedad_pct: float = 0.0
+    luz_pct: float = 0.0
+    timestamp: float = 0.0
+
+
+# ==========================================
+# BASE DE DATOS DE PLANTAS
+# ==========================================
+
+# Base de datos con 30 plantas y sus configuraciones específicas
+BASE_DATOS_PLANTAS = [
+    ConfiguracionPlanta(nombre="Cactus", humedad_min=15.0, humedad_max=40.0, 
+                       temperatura_min=15.0, temperatura_max=35.0, luz_min=60.0, luz_max=100.0,
+                       umbral_sequia=0.35, frecuencia_riego_dias=14),
+    ConfiguracionPlanta(nombre="Aloe Vera", humedad_min=20.0, humedad_max=50.0,
+                       temperatura_min=15.0, temperatura_max=30.0, luz_min=50.0, luz_max=90.0,
+                       umbral_sequia=0.40, frecuencia_riego_dias=10),
+    ConfiguracionPlanta(nombre="Lavanda", humedad_min=25.0, humedad_max=55.0,
+                       temperatura_min=15.0, temperatura_max=28.0, luz_min=70.0, luz_max=100.0,
+                       umbral_sequia=0.45, frecuencia_riego_dias=7),
+    ConfiguracionPlanta(nombre="Orquídea", humedad_min=40.0, humedad_max=70.0,
+                       temperatura_min=18.0, temperatura_max=26.0, luz_min=30.0, luz_max=70.0,
+                       umbral_sequia=0.55, frecuencia_riego_dias=8),
+    ConfiguracionPlanta(nombre="Menta", humedad_min=50.0, humedad_max=80.0,
+                       temperatura_min=15.0, temperatura_max=25.0, luz_min=40.0, luz_max=80.0,
+                       umbral_sequia=0.60, frecuencia_riego_dias=3),
+    ConfiguracionPlanta(nombre="Helecho", humedad_min=60.0, humedad_max=85.0,
+                       temperatura_min=16.0, temperatura_max=24.0, luz_min=20.0, luz_max=60.0,
+                       umbral_sequia=0.65, frecuencia_riego_dias=2),
+    ConfiguracionPlanta(nombre="Suculenta", humedad_min=20.0, humedad_max=45.0,
+                       temperatura_min=15.0, temperatura_max=32.0, luz_min=60.0, luz_max=100.0,
+                       umbral_sequia=0.40, frecuencia_riego_dias=12),
+    ConfiguracionPlanta(nombre="Espada de San Jorge", humedad_min=25.0, humedad_max=50.0,
+                       temperatura_min=15.0, temperatura_max=30.0, luz_min=30.0, luz_max=90.0,
+                       umbral_sequia=0.50, frecuencia_riego_dias=14),
+    ConfiguracionPlanta(nombre="Ficus", humedad_min=40.0, humedad_max=70.0,
+                       temperatura_min=18.0, temperatura_max=27.0, luz_min=40.0, luz_max=80.0,
+                       umbral_sequia=0.55, frecuencia_riego_dias=5),
+    ConfiguracionPlanta(nombre="Poto", humedad_min=35.0, humedad_max=65.0,
+                       temperatura_min=16.0, temperatura_max=28.0, luz_min=20.0, luz_max=70.0,
+                       umbral_sequia=0.50, frecuencia_riego_dias=4),
+    ConfiguracionPlanta(nombre="Bambú de la suerte", humedad_min=40.0, humedad_max=75.0,
+                       temperatura_min=18.0, temperatura_max=28.0, luz_min=30.0, luz_max=70.0,
+                       umbral_sequia=0.45, frecuencia_riego_dias=6),
+    ConfiguracionPlanta(nombre="Romero", humedad_min=25.0, humedad_max=50.0,
+                       temperatura_min=15.0, temperatura_max=30.0, luz_min=70.0, luz_max=100.0,
+                       umbral_sequia=0.40, frecuencia_riego_dias=7),
+    ConfiguracionPlanta(nombre="Albahaca", humedad_min=45.0, humedad_max=75.0,
+                       temperatura_min=18.0, temperatura_max=28.0, luz_min=60.0, luz_max=90.0,
+                       umbral_sequia=0.55, frecuencia_riego_dias=3),
+    ConfiguracionPlanta(nombre="Tomillo", humedad_min=25.0, humedad_max=55.0,
+                       temperatura_min=15.0, temperatura_max=28.0, luz_min=70.0, luz_max=100.0,
+                       umbral_sequia=0.42, frecuencia_riego_dias=6),
+    ConfiguracionPlanta(nombre="Geranio", humedad_min=40.0, humedad_max=70.0,
+                       temperatura_min=15.0, temperatura_max=27.0, luz_min=60.0, luz_max=90.0,
+                       umbral_sequia=0.53, frecuencia_riego_dias=4),
+    ConfiguracionPlanta(nombre="Jazmín", humedad_min=35.0, humedad_max=65.0,
+                       temperatura_min=18.0, temperatura_max=28.0, luz_min=50.0, luz_max=85.0,
+                       umbral_sequia=0.50, frecuencia_riego_dias=5),
+    ConfiguracionPlanta(nombre="Hiedra inglesa", humedad_min=40.0, humedad_max=70.0,
+                       temperatura_min=15.0, temperatura_max=24.0, luz_min=25.0, luz_max=70.0,
+                       umbral_sequia=0.52, frecuencia_riego_dias=4),
+    ConfiguracionPlanta(nombre="Begonia", humedad_min=50.0, humedad_max=75.0,
+                       temperatura_min=18.0, temperatura_max=26.0, luz_min=40.0, luz_max=75.0,
+                       umbral_sequia=0.60, frecuencia_riego_dias=3),
+    ConfiguracionPlanta(nombre="Anturio", humedad_min=50.0, humedad_max=80.0,
+                       temperatura_min=20.0, temperatura_max=28.0, luz_min=30.0, luz_max=65.0,
+                       umbral_sequia=0.58, frecuencia_riego_dias=4),
+    ConfiguracionPlanta(nombre="Monstera", humedad_min=40.0, humedad_max=70.0,
+                       temperatura_min=18.0, temperatura_max=27.0, luz_min=35.0, luz_max=75.0,
+                       umbral_sequia=0.55, frecuencia_riego_dias=6),
+    ConfiguracionPlanta(nombre="Calathea", humedad_min=55.0, humedad_max=80.0,
+                       temperatura_min=18.0, temperatura_max=26.0, luz_min=25.0, luz_max=60.0,
+                       umbral_sequia=0.62, frecuencia_riego_dias=3),
+    ConfiguracionPlanta(nombre="Crotón", humedad_min=45.0, humedad_max=75.0,
+                       temperatura_min=18.0, temperatura_max=28.0, luz_min=60.0, luz_max=90.0,
+                       umbral_sequia=0.57, frecuencia_riego_dias=5),
+    ConfiguracionPlanta(nombre="Palmera Areca", humedad_min=40.0, humedad_max=70.0,
+                       temperatura_min=18.0, temperatura_max=28.0, luz_min=40.0, luz_max=80.0,
+                       umbral_sequia=0.50, frecuencia_riego_dias=7),
+    ConfiguracionPlanta(nombre="Lirio de paz", humedad_min=50.0, humedad_max=80.0,
+                       temperatura_min=18.0, temperatura_max=26.0, luz_min=20.0, luz_max=60.0,
+                       umbral_sequia=0.60, frecuencia_riego_dias=3),
+    ConfiguracionPlanta(nombre="Costilla de Adán", humedad_min=40.0, humedad_max=70.0,
+                       temperatura_min=18.0, temperatura_max=27.0, luz_min=35.0, luz_max=75.0,
+                       umbral_sequia=0.55, frecuencia_riego_dias=5),
+    ConfiguracionPlanta(nombre="Drácena", humedad_min=35.0, humedad_max=65.0,
+                       temperatura_min=16.0, temperatura_max=26.0, luz_min=30.0, luz_max=75.0,
+                       umbral_sequia=0.48, frecuencia_riego_dias=7),
+    ConfiguracionPlanta(nombre="Aglaonema", humedad_min=40.0, humedad_max=70.0,
+                       temperatura_min=18.0, temperatura_max=27.0, luz_min=20.0, luz_max=65.0,
+                       umbral_sequia=0.52, frecuencia_riego_dias=5),
+    ConfiguracionPlanta(nombre="Portulaca", humedad_min=20.0, humedad_max=45.0,
+                       temperatura_min=18.0, temperatura_max=32.0, luz_min=70.0, luz_max=100.0,
+                       umbral_sequia=0.38, frecuencia_riego_dias=9),
+    ConfiguracionPlanta(nombre="Margarita", humedad_min=35.0, humedad_max=65.0,
+                       temperatura_min=15.0, temperatura_max=25.0, luz_min=60.0, luz_max=90.0,
+                       umbral_sequia=0.50, frecuencia_riego_dias=4),
+    ConfiguracionPlanta(nombre="Verbena", humedad_min=35.0, humedad_max=65.0,
+                       temperatura_min=16.0, temperatura_max=28.0, luz_min=60.0, luz_max=90.0,
+                       umbral_sequia=0.47, frecuencia_riego_dias=6),
+]
+
+
+def obtener_planta_por_nombre(nombre: str) -> Optional[ConfiguracionPlanta]:
+    """
+    Busca una planta en la base de datos por su nombre
+    
+    Args:
+        nombre: Nombre de la planta a buscar (no case-sensitive)
+        
+    Returns:
+        ConfiguracionPlanta si se encuentra, None si no existe
+    """
+    nombre_lower = nombre.lower().strip()
+    for planta in BASE_DATOS_PLANTAS:
+        if planta.nombre.lower() == nombre_lower:
+            return planta
+    return None
+
+
+def listar_plantas_disponibles():
+    """Muestra todas las plantas disponibles en la base de datos"""
+    print("\n" + "="*70)
+    print("🌿 PLANTAS DISPONIBLES EN LA BASE DE DATOS")
+    print("="*70)
+    for i, planta in enumerate(BASE_DATOS_PLANTAS, 1):
+        print(f"{i:2d}. {planta.nombre:25s} | Riego cada {planta.frecuencia_riego_dias:2d} días | "
+              f"Humedad: {planta.humedad_min:.0f}-{planta.humedad_max:.0f}%")
+    print("="*70 + "\n")
+
+
+def generar_dataset_csv(ruta_archivo: str = "dataset_plantas_30.csv"):
+    """
+    Genera un archivo CSV con datos simulados de las 30 plantas
+    Requiere numpy y pandas
+    """
+    if not LIBRERIAS_DISPONIBLES:
+        print("⚠️ Se requieren numpy y pandas para generar el dataset CSV")
+        return None
+    
+    import numpy as np
+    import pandas as pd
+    
+    print("📊 Generando dataset de 30 plantas...")
+    
+    data = []
+    for planta_config in BASE_DATOS_PLANTAS:
+        # Simular 50 días de lecturas de humedad para cada planta
+        humedad_min_norm = planta_config.humedad_min / 100.0
+        humedad_max_norm = planta_config.humedad_max / 100.0
+        
+        humedad_valores = np.random.uniform(humedad_min_norm, humedad_max_norm, 50)
+        
+        for dia, humedad in enumerate(humedad_valores, 1):
+            data.append({
+                'planta': planta_config.nombre,
+                'dia': dia,
+                'humedad': round(humedad, 3),
+                'humedad_pct': round(humedad * 100, 2),
+                'umbral_sequia': planta_config.umbral_sequia,
+                'frecuencia_riego': planta_config.frecuencia_riego_dias
+            })
+    
+    df = pd.DataFrame(data)
+    df.to_csv(ruta_archivo, index=False)
+    
+    print(f"✅ Dataset generado: {ruta_archivo}")
+    print(f"   - Total de registros: {len(df)}")
+    print(f"   - Plantas: {len(BASE_DATOS_PLANTAS)}")
+    print(f"   - Días por planta: 50")
+    
+    return df
+
+
+# ==========================================
+# MÓDULO 1: MODELO DE MACHINE LEARNING
+# ==========================================
+
+class ModeloPrediccionRiego:
+    """
+    Modelo de regresión lineal para predecir necesidad de riego
+    Implementación con sklearn si está disponible, sino usa matemáticas puras
+    """
+    
+    def __init__(self):
+        self.entrenado: bool = False
+        self.pendiente: Optional[float] = None
+        self.intercepto: Optional[float] = None
+        self.r2_score: Optional[float] = None
+        self.modelo: Optional[Any] = None  # LinearRegression o None
+        self.usar_sklearn: bool = False
+        
+        if LIBRERIAS_DISPONIBLES:
+            self.modelo = LinearRegression()
+            self.usar_sklearn = True
+        
+    def entrenar(self, humedad_datos: Optional[List[float]] = None, 
+                 estado_datos: Optional[List[float]] = None):
+        """
+        Entrena el modelo con datos de humedad y estado de la planta
+        
+        Args:
+            humedad_datos: Lista con valores de humedad (0-100%)
+            estado_datos: Lista con estados (1=necesita agua, 0=bien)
+        """
+        # Datos por defecto basados en observaciones típicas
+        if humedad_datos is None:
+            humedad_datos = [10, 15, 20, 25, 30, 35, 40, 45, 50, 
+                           55, 60, 65, 70, 75, 80, 85, 90, 95]
+        
+        if estado_datos is None:
+            estado_datos = [1.0, 1.0, 1.0, 1.0, 0.9, 0.8, 0.7, 0.5, 0.3,
+                          0.2, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        
+        if self.usar_sklearn and self.modelo is not None:
+            # Usar sklearn
+            import numpy as np
+            h_array = np.array(humedad_datos).reshape(-1, 1)
+            e_array = np.array(estado_datos)
+            
+            self.modelo.fit(h_array, e_array)
+            self.pendiente = self.modelo.coef_[0]
+            self.intercepto = self.modelo.intercept_
+            
+            predicciones = self.modelo.predict(h_array)
+            self.r2_score = r2_score(e_array, predicciones)
+        else:
+            # Implementación matemática pura
+            n = len(humedad_datos)
+            media_x = sum(humedad_datos) / n
+            media_y = sum(estado_datos) / n
+            
+            numerador = sum((humedad_datos[i] - media_x) * (estado_datos[i] - media_y) 
+                           for i in range(n))
+            denominador = sum((humedad_datos[i] - media_x) ** 2 for i in range(n))
+            
+            self.pendiente = numerador / denominador if denominador != 0 else 0
+            self.intercepto = media_y - (self.pendiente * media_x)
+            
+            # Calcular R² manualmente
+            predicciones = [self.pendiente * x + self.intercepto for x in humedad_datos]
+            ss_res = sum((estado_datos[i] - predicciones[i]) ** 2 for i in range(n))
+            ss_tot = sum((estado_datos[i] - media_y) ** 2 for i in range(n))
+            self.r2_score = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+        
+        self.entrenado = True
+        return self
+    
+    def predecir(self, humedad: float) -> float:
+        """
+        Predice la necesidad de agua basándose en la humedad actual
+        
+        Returns:
+            float: Valor entre 0 y 1 (1 = necesita agua urgente)
+        """
+        if not self.entrenado:
+            raise ValueError("El modelo debe ser entrenado primero")
+        
+        if self.usar_sklearn and self.modelo is not None:
+            import numpy as np
+            entrada = np.array([[float(humedad)]])
+            prediccion = self.modelo.predict(entrada)[0]
+        else:
+            prediccion = (self.pendiente * humedad) + self.intercepto  # type: ignore
+        
+        return float(max(0.0, min(1.0, prediccion)))
+    
+    def obtener_ecuacion(self) -> str:
+        """Retorna la ecuación del modelo en formato legible"""
+        return f"y = {self.pendiente:.4f}x + {self.intercepto:.4f}"
+    
+    def mostrar_metricas(self):
+        """Imprime las métricas del modelo"""
+        print("\n" + "="*50)
+        print("MODELO MATEMÁTICO DE PREDICCIÓN")
+        print("="*50)
+        print(f"Ecuación: {self.obtener_ecuacion()}")
+        print(f"R² Score: {self.r2_score:.4f}")
+        print(f"Pendiente (m): {self.pendiente:.4f}")
+        print(f"Intercepto (b): {self.intercepto:.4f}")
+        print(f"Método: {'sklearn' if self.usar_sklearn else 'matemáticas puras'}")
+        print("="*50 + "\n")
+    
+    def graficar_modelo(self, guardar: bool = False):
+        """Genera una visualización del modelo entrenado"""
+        if not LIBRERIAS_DISPONIBLES:
+            print("⚠️ matplotlib no está disponible para graficar")
+            return
+        
+        import numpy as np
+        import matplotlib.pyplot as plt
+        
+        humedad_plot = np.linspace(0, 100, 100)
+        
+        if self.usar_sklearn and self.modelo is not None:
+            predicciones = self.modelo.predict(humedad_plot.reshape(-1, 1))
+        else:
+            if self.pendiente is not None and self.intercepto is not None:
+                predicciones = np.array([float(self.pendiente * h + self.intercepto) 
+                                        for h in humedad_plot])
+            else:
+                print("⚠️ Modelo no entrenado correctamente")
+                return
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(humedad_plot, predicciones, 'b-', linewidth=2, 
+                label='Modelo de Predicción')
+        plt.axhline(y=0.5, color='r', linestyle='--', 
+                   label='Umbral de Decisión')
+        
+        # Zonas de riesgo - convertir a arrays numpy explícitamente
+        pred_array = np.asarray(predicciones, dtype=float)
+        humedad_array = np.asarray(humedad_plot, dtype=float)
+        
+        plt.fill_between(humedad_array, 0, pred_array, 
+                        where=(pred_array >= 0.5), alpha=0.3, 
+                        color='red', label='Zona: Necesita Agua')
+        plt.fill_between(humedad_array, 0, pred_array, 
+                        where=(pred_array < 0.5), alpha=0.3, 
+                        color='green', label='Zona: Buena Hidratación')
+        
+        plt.title('Modelo de Predicción de Riego\n' + 
+                 f'Ecuación: {self.obtener_ecuacion()}', fontsize=14, 
+                 fontweight='bold')
+        plt.xlabel('Humedad del Suelo (%)', fontsize=12)
+        plt.ylabel('Necesidad de Agua (0=Bien, 1=Crítico)', fontsize=12)
+        plt.grid(True, alpha=0.3)
+        plt.legend(loc='best')
+        plt.ylim(-0.1, 1.1)
+        
+        if guardar:
+            plt.savefig('modelo_prediccion_riego.png', dpi=300, 
+                       bbox_inches='tight')
+        
+        plt.show()
+
+
+# ==========================================
+# MÓDULO 2: TRADUCTOR DE PLANTAS
+# ==========================================
+
+class TraductorPlantaInteligente:
+    """
+    Sistema inteligente de monitoreo y traducción del estado de plantas
+    Integra sensores, procesamiento matemático y machine learning
+    """
+    
+    def __init__(self, nombre: str, tipo_planta: str = "general",
+                 config: Optional[ConfiguracionPlanta] = None):
+        self.nombre = nombre
+        self.tipo_planta = tipo_planta
+        self.config = config if config else ConfiguracionPlanta()
+        self.historial: List[LecturaSensores] = []
+        self.modelo_ml = ModeloPrediccionRiego()
+        
+        # Entrenar modelo con datos por defecto
+        self.modelo_ml.entrenar()
+    
+    def leer_sensores_simulados(self) -> Tuple[int, int, float]:
+        """
+        Simula la lectura de sensores físicos (Arduino, ESP32, etc.)
+        
+        Returns:
+            Tuple: (humedad_raw, luz_raw, temperatura)
+        """
+        humedad_raw = random.randint(0, 1023)
+        luz_raw = random.randint(0, 1023)
+        
+        # Temperatura con variabilidad realista
+        temp_base = random.uniform(18.0, 30.0)
+        temp_ruido = random.gauss(0, 0.5)
+        temperatura = round(temp_base + temp_ruido, 2)
+        
+        return humedad_raw, luz_raw, temperatura
+    
+    @staticmethod
+    def normalizar_sensor(valor_crudo: int, rango_max: int = 1023) -> float:
+        """
+        Normalización lineal: Convierte valor crudo a porcentaje
+        
+        Fórmula matemática: f(x) = (x / x_max) × 100
+        
+        Args:
+            valor_crudo: Valor leído del sensor (0 a rango_max)
+            rango_max: Valor máximo del sensor (default: 1023 para Arduino)
+            
+        Returns:
+            float: Porcentaje normalizado (0-100)
+        """
+        if rango_max <= 0:
+            raise ValueError("rango_max debe ser mayor que 0")
+        
+        porcentaje = (valor_crudo / rango_max) * 100
+        return round(max(0, min(100, porcentaje)), 2)
+    
+    def analizar_condiciones(self, lectura: LecturaSensores) -> Dict:
+        """
+        Analiza las condiciones de la planta y genera diagnóstico
+        
+        Returns:
+            Dict con diagnóstico completo
+        """
+        problemas = []
+        prioridades = []
+        
+        # Análisis de Humedad con ML
+        necesidad_agua = self.modelo_ml.predecir(lectura.humedad_pct)
+        
+        if necesidad_agua > 0.7:
+            problemas.append(f"💧 URGENTE: Sed extrema (Humedad: {lectura.humedad_pct}%)")
+            prioridades.append(3)
+        elif necesidad_agua > 0.5:
+            problemas.append(f"💧 Tengo sed (Humedad: {lectura.humedad_pct}%)")
+            prioridades.append(2)
+        elif lectura.humedad_pct > self.config.humedad_max:
+            problemas.append(f"🌊 Demasiada agua, riesgo de pudrición (Humedad: {lectura.humedad_pct}%)")
+            prioridades.append(2)
+        
+        # Análisis de Temperatura
+        if lectura.temperatura > self.config.temperatura_max:
+            diferencia = lectura.temperatura - self.config.temperatura_max
+            if diferencia > 5:
+                problemas.append(f"🔥 CRÍTICO: Calor extremo ({lectura.temperatura}°C)")
+                prioridades.append(3)
+            else:
+                problemas.append(f"🔥 Hace mucho calor ({lectura.temperatura}°C)")
+                prioridades.append(2)
+        elif lectura.temperatura < self.config.temperatura_min:
+            problemas.append(f"❄️ Hace frío ({lectura.temperatura}°C)")
+            prioridades.append(2)
+        
+        # Análisis de Luz
+        if lectura.luz_pct < self.config.luz_min:
+            problemas.append(f"🌑 Muy oscuro, necesito luz (Luz: {lectura.luz_pct}%)")
+            prioridades.append(1)
+        elif lectura.luz_pct > self.config.luz_max:
+            problemas.append(f"☀️ Luz muy intensa, me quemo (Luz: {lectura.luz_pct}%)")
+            prioridades.append(2)
+        
+        # Determinar estado general
+        if not problemas:
+            estado = EstadoPlanta.FELIZ
+        elif max(prioridades, default=0) >= 3:
+            estado = EstadoPlanta.CRITICA
+        elif max(prioridades, default=0) >= 2:
+            estado = EstadoPlanta.ESTRESADA
+        else:
+            estado = EstadoPlanta.PREOCUPADA
+        
+        return {
+            'estado': estado,
+            'problemas': problemas,
+            'prioridad_maxima': max(prioridades, default=0),
+            'necesidad_agua_ml': necesidad_agua,
+            'lectura': lectura
+        }
+    
+    def traducir_mensaje(self, diagnostico: Dict) -> str:
+        """
+        Convierte el diagnóstico técnico en lenguaje natural
+        
+        Returns:
+            str: Mensaje en lenguaje humano desde la perspectiva de la planta
+        """
+        estado = diagnostico['estado']
+        problemas = diagnostico['problemas']
+        
+        if not problemas:
+            return f"🌿 {self.nombre} dice: ¡Estoy perfecta! Todo está ideal."
+        
+        # Construir mensaje con priorización
+        if len(problemas) == 1:
+            mensaje_problemas = problemas[0]
+        elif len(problemas) == 2:
+            mensaje_problemas = f"{problemas[0]} y {problemas[1]}"
+        else:
+            mensaje_problemas = ", ".join(problemas[:-1]) + f" y {problemas[-1]}"
+        
+        return f"{estado.value} {self.nombre} dice: {mensaje_problemas}."
+    
+    def procesar_lectura(self) -> Tuple[LecturaSensores, str]:
+        """
+        Pipeline completo: Lee sensores → Procesa → Diagnostica → Traduce
+        
+        Returns:
+            Tuple: (LecturaSensores, mensaje_traducido)
+        """
+        # 1. Leer sensores (simulado)
+        h_raw, l_raw, temp = self.leer_sensores_simulados()
+        
+        # 2. Normalizar datos
+        h_pct = self.normalizar_sensor(h_raw)
+        l_pct = self.normalizar_sensor(l_raw)
+        
+        # 3. Crear registro de lectura
+        lectura = LecturaSensores(
+            humedad_raw=h_raw,
+            luz_raw=l_raw,
+            temperatura=temp,
+            humedad_pct=h_pct,
+            luz_pct=l_pct,
+            timestamp=time.time()
+        )
+        
+        # 4. Analizar y traducir
+        diagnostico = self.analizar_condiciones(lectura)
+        mensaje = self.traducir_mensaje(diagnostico)
+        
+        # 5. Guardar en historial
+        self.historial.append(lectura)
+        
+        return lectura, mensaje
+    
+    def mostrar_estadisticas(self):
+        """Muestra estadísticas del historial de lecturas"""
+        if not self.historial:
+            print("No hay datos históricos disponibles.")
+            return
+        
+        humedades = [l.humedad_pct for l in self.historial]
+        temperaturas = [l.temperatura for l in self.historial]
+        luces = [l.luz_pct for l in self.historial]
+        
+        def calcular_promedio(datos):
+            return sum(datos) / len(datos) if datos else 0
+        
+        print("\n" + "="*60)
+        print(f"ESTADÍSTICAS DE {self.nombre.upper()}")
+        print("="*60)
+        print(f"Total de lecturas: {len(self.historial)}")
+        print(f"\nHumedad del Suelo:")
+        print(f"  • Promedio: {calcular_promedio(humedades):.2f}%")
+        print(f"  • Mínimo: {min(humedades):.2f}%")
+        print(f"  • Máximo: {max(humedades):.2f}%")
+        print(f"\nTemperatura:")
+        print(f"  • Promedio: {calcular_promedio(temperaturas):.2f}°C")
+        print(f"  • Mínimo: {min(temperaturas):.2f}°C")
+        print(f"  • Máximo: {max(temperaturas):.2f}°C")
+        print(f"\nLuz:")
+        print(f"  • Promedio: {calcular_promedio(luces):.2f}%")
+        print(f"  • Mínimo: {min(luces):.2f}%")
+        print(f"  • Máximo: {max(luces):.2f}%")
+        print("="*60 + "\n")
+
+
+# ==========================================
+# PROGRAMA PRINCIPAL
+# ==========================================
+
+def main():
+    """Función principal del programa"""
+    
+    print("="*70)
+    print(" 🌱 TRADUCTOR DE PLANTAS INTELIGENTE - Sistema v2.0")
+    print("="*70)
+    print("Sistema integrado de monitoreo con Machine Learning")
+    print("Base de datos: 30 especies de plantas\n")
+    
+    # Mostrar menú de opciones
+    print("OPCIONES:")
+    print("1. Monitorear una planta de la base de datos")
+    print("2. Ver todas las plantas disponibles")
+    print("3. Generar dataset CSV (requiere numpy/pandas)")
+    print("4. Usar configuración personalizada")
+    
+    opcion = input("\nSelecciona una opción (1-4): ").strip()
+    
+    plantita = None
+    
+    if opcion == "1":
+        # Monitorear planta de la base de datos
+        print("\n🔍 Buscar planta en la base de datos")
+        nombre = input("Escribe el nombre de tu planta: ").strip()
+        
+        config = obtener_planta_por_nombre(nombre)
+        
+        if config:
+            print(f"\n✅ ¡Planta encontrada: {config.nombre}!")
+            print(f"   📋 Configuración:")
+            print(f"      • Humedad óptima: {config.humedad_min:.0f}-{config.humedad_max:.0f}%")
+            print(f"      • Temperatura: {config.temperatura_min:.0f}-{config.temperatura_max:.0f}°C")
+            print(f"      • Luz: {config.luz_min:.0f}-{config.luz_max:.0f}%")
+            print(f"      • Frecuencia de riego: cada {config.frecuencia_riego_dias} días")
+            
+            plantita = TraductorPlantaInteligente(
+                nombre=config.nombre,
+                tipo_planta=config.nombre,
+                config=config
+            )
+        else:
+            print(f"\n❌ Planta '{nombre}' no encontrada en la base de datos")
+            print("💡 Tip: Usa la opción 2 para ver todas las plantas disponibles")
+            return
+    
+    elif opcion == "2":
+        # Ver todas las plantas
+        listar_plantas_disponibles()
+        
+        respuesta = input("¿Deseas monitorear alguna planta? (s/n): ").lower()
+        if respuesta == 's':
+            numero = input("Escribe el número o nombre de la planta: ").strip()
+            
+            # Intentar por número
+            try:
+                idx = int(numero) - 1
+                if 0 <= idx < len(BASE_DATOS_PLANTAS):
+                    config = BASE_DATOS_PLANTAS[idx]
+                else:
+                    print("❌ Número inválido")
+                    return
+            except ValueError:
+                # Intentar por nombre
+                config = obtener_planta_por_nombre(numero)
+                if not config:
+                    print(f"❌ Planta '{numero}' no encontrada")
+                    return
+            
+            plantita = TraductorPlantaInteligente(
+                nombre=config.nombre,
+                tipo_planta=config.nombre,
+                config=config
+            )
+        else:
+            return
+    
+    elif opcion == "3":
+        # Generar dataset CSV
+        ruta = input("\nRuta del archivo CSV (Enter para 'dataset_plantas_30.csv'): ").strip()
+        if not ruta:
+            ruta = "dataset_plantas_30.csv"
+        
+        df = generar_dataset_csv(ruta)
+        
+        if df is not None and LIBRERIAS_DISPONIBLES:
+            # Mostrar gráfica de ejemplo
+            import matplotlib.pyplot as plt
+            respuesta = input("\n¿Deseas ver una gráfica de ejemplo? (s/n): ").lower()
+            if respuesta == 's':
+                planta_ejemplo = input("Nombre de la planta (Enter para 'Cactus'): ").strip()
+                if not planta_ejemplo:
+                    planta_ejemplo = "Cactus"
+                
+                subset = df[df["planta"] == planta_ejemplo]
+                if not subset.empty:
+                    plt.figure(figsize=(10, 6))
+                    plt.plot(subset["dia"], subset["humedad_pct"], 'o-', linewidth=2)
+                    plt.axhline(y=subset["umbral_sequia"].iloc[0] * 100, 
+                               color='r', linestyle='--', label='Umbral de sequía')
+                    plt.xlabel("Día", fontsize=12)
+                    plt.ylabel("Humedad (%)", fontsize=12)
+                    plt.title(f"Humedad simulada - {planta_ejemplo}", fontsize=14)
+                    plt.grid(True, alpha=0.3)
+                    plt.legend()
+                    plt.tight_layout()
+                    plt.show()
+                else:
+                    print(f"❌ No hay datos para '{planta_ejemplo}'")
+        
+        return
+    
+    elif opcion == "4":
+        # Configuración personalizada
+        print("\n⚙️ Configuración Personalizada")
+        nombre = input("Nombre de tu planta: ").strip()
+        
+        config = ConfiguracionPlanta(
+            nombre=nombre,
+            humedad_min=float(input("Humedad mínima (%) [30]: ") or "30"),
+            humedad_max=float(input("Humedad máxima (%) [80]: ") or "80"),
+            temperatura_min=float(input("Temperatura mínima (°C) [15]: ") or "15"),
+            temperatura_max=float(input("Temperatura máxima (°C) [28]: ") or "28"),
+            luz_min=float(input("Luz mínima (%) [20]: ") or "20"),
+            luz_max=float(input("Luz máxima (%) [90]: ") or "90"),
+        )
+        
+        plantita = TraductorPlantaInteligente(
+            nombre=nombre,
+            tipo_planta="Personalizada",
+            config=config
+        )
+    
+    else:
+        print("❌ Opción inválida")
+        return
+    
+    if plantita is None:
+        return
+    
+    # Mostrar métricas del modelo ML
+    print()
+    plantita.modelo_ml.mostrar_metricas()
+    
+    # Realizar múltiples lecturas
+    num_lecturas = int(input("¿Cuántas lecturas deseas realizar? [5]: ").strip() or "5")
+    print(f"\nIniciando {num_lecturas} lecturas de monitoreo...\n")
+    
+    for i in range(num_lecturas):
+        print(f"{'─'*70}")
+        print(f"📊 LECTURA #{i+1}/{num_lecturas}")
+        print(f"{'─'*70}")
+        
+        # Procesar lectura completa
+        lectura, mensaje = plantita.procesar_lectura()
+        
+        # Mostrar datos técnicos
+        print(f"📡 Datos Crudos:")
+        print(f"   └─ Humedad RAW: {lectura.humedad_raw}/1023")
+        print(f"   └─ Luz RAW: {lectura.luz_raw}/1023")
+        print(f"   └─ Temperatura: {lectura.temperatura}°C")
+        
+        print(f"\n🔢 Datos Procesados:")
+        print(f"   └─ Humedad: {lectura.humedad_pct}%")
+        print(f"   └─ Luz: {lectura.luz_pct}%")
+        print(f"   └─ Temperatura: {lectura.temperatura}°C")
+        
+        # Predicción ML
+        necesidad = plantita.modelo_ml.predecir(lectura.humedad_pct)
+        print(f"\n🤖 Predicción ML:")
+        print(f"   └─ Necesidad de agua: {necesidad:.2%}")
+        
+        # Mensaje traducido
+        print(f"\n💬 {mensaje}")
+        print()
+        
+        time.sleep(1.5)  # Pausa entre lecturas
+    
+    # Mostrar estadísticas finales
+    plantita.mostrar_estadisticas()
+    
+    # Opción de graficar el modelo (solo si matplotlib está disponible)
+    if LIBRERIAS_DISPONIBLES:
+        respuesta = input("¿Deseas ver la gráfica del modelo ML? (s/n): ").lower()
+        if respuesta == 's':
+            plantita.modelo_ml.graficar_modelo(guardar=False)
+    
+    print("\n✅ Monitoreo completado exitosamente.")
+    print("="*70)
+
+
+if __name__ == "__main__":
+    main()

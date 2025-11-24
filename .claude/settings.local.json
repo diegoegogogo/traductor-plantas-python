@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)",
+      "Bash(del convert_plants.py verify_conversion.py)",
+      "Bash(timeout:*)",
+      "Bash(dir:*)",
+      "Bash(tree:*)",
+      "Bash(git add:*)",
+      "Bash(rm:*)",
+      "Bash(.venv/Scripts/pip:*)",
+      "Bash(../.venv/Scripts/pip install:*)",
+      "Bash(../.venv/Scripts/python:*)",
+      "Bash(\".venv\\Scripts\\activate.bat\")",
+      "Bash(\".venv\\Scripts\\python.exe\" -c \"import sys; print(sys.prefix)\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

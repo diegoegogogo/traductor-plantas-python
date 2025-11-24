@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.pyc
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+*.backup
+*.bak
+
+# Logs
+*.log
+
+# Data temporales
+*.tmp
+
+# Ignorar mis datos específicos para que no sean públicos
+# Datos y archivos privados en carpetas específicas
+data/*.json
+data/*.csv
+datos/*.json
+datos/*.csv
+secrets.json
+credentials.json
+config/local.json
+config/secrets.json
+
+# Permitir archivos de configuración importantes del proyecto
+!package.json
+!package-lock.json
+!tsconfig.json
+!jsconfig.json
+!pyproject.toml
+!.eslintrc.json
+!.prettierrc.json

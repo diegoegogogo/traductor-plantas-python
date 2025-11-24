@@ -358,7 +358,12 @@ def generar_dashboard(
     # Guardar o mostrar
     if guardar:
         if nombre_archivo is None:
-            nombre_archivo = f"dashboard_{nombre_planta.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            # Limpiar caracteres inválidos en nombres de archivo (/, \, :, *, ?, ", <, >, |)
+            nombre_limpio = nombre_planta.replace(' ', '_').replace('/', '_').replace('\\', '_')
+            nombre_limpio = nombre_limpio.replace(':', '_').replace('*', '_').replace('?', '_')
+            nombre_limpio = nombre_limpio.replace('"', '_').replace('<', '_').replace('>', '_').replace('|', '_')
+            nombre_limpio = nombre_limpio.replace('(', '').replace(')', '')  # Eliminar paréntesis
+            nombre_archivo = f"dashboard_{nombre_limpio}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
         plt.savefig(nombre_archivo, dpi=300, bbox_inches='tight')
         print(f"Dashboard guardado exitosamente: {nombre_archivo}")
     else:
@@ -542,68 +547,88 @@ if __name__ == "__main__":
 
     # Verificar si se pasó un nombre de planta como argumento
     if len(sys.argv) > 1:
+        # Modo no interactivo (con argumentos)
         nombre_planta = sys.argv[1]
         dias = int(sys.argv[2]) if len(sys.argv) > 2 else 30
         guardar = sys.argv[3].lower() == 'true' if len(sys.argv) > 3 else False
-    else:
-        # Modo interactivo: preguntar al usuario
-        print("\nEjemplos de plantas disponibles:")
-        print("  - Acacia, Airplant, Alpine Buttercup")
-        print("  - Alumroot, American Globeflower, Angelwing Jasmine")
-        print("  - Aaron's Beard, Absaroka Range Beardtongue")
-        print("\nTip: Tambien puedes usar: python dashboard_plantas.py NombrePlanta [dias] [guardar]")
 
-        # Preguntar nombre de la planta
-        nombre_planta = input("\nIngrese el nombre de la planta que desea visualizar o escriba \"random\": ").strip()
-
-        # Si el usuario escribe "random", seleccionar una planta aleatoria
-        if nombre_planta.lower() == "random":
-            plantas_disponibles = cargar_plantas()
-            if plantas_disponibles:
-                planta_aleatoria = random.choice(plantas_disponibles)
-                nombre_planta = planta_aleatoria.nombre
-                print(f"✨ Planta aleatoria seleccionada: {nombre_planta} ({planta_aleatoria.tipo})")
-            else:
-                print("Error: No se pudieron cargar las plantas disponibles.")
-                nombre_planta = ""
-
-        # Preguntar cantidad de días
-        while True:
+        if nombre_planta:
             try:
-                dias_input = input("Ingrese la cantidad de dias de datos a simular (7, 15, 30): ").strip()
-                if dias_input == "":
-                    dias = 30
-                    break
-                dias = int(dias_input)
-                if dias > 0 and dias <= 365:
-                    break
-                else:
-                    print("Por favor ingrese un valor entre 1 y 365")
-            except ValueError:
-                print("Por favor ingrese un numero valido")
-
-        # Preguntar si desea guardar
-        guardar_input = input("Desea guardar el dashboard como imagen? (s/n, default: n): ").strip().lower()
-        guardar = guardar_input in ['s', 'si', 'yes', 'y']
-
-    if nombre_planta:
-        try:
-            # Generar dashboard con datos reales de la planta
-            print(f"\nGenerando dashboard para '{nombre_planta}' con {dias} dias de datos...")
-            generar_dashboard_con_datos(nombre_planta, dias=dias, guardar=guardar)
-            print("\nOK - Dashboard generado exitosamente!")
-        except ValueError as e:
-            print(f"\nError: {e}")
-            print("\nIntentando con planta de ejemplo (Acacia)...")
+                # Generar dashboard con datos reales de la planta
+                print(f"\nGenerando dashboard para '{nombre_planta}' con {dias} dias de datos...")
+                generar_dashboard_con_datos(nombre_planta, dias=dias, guardar=guardar)
+                print("\n[OK] Dashboard generado exitosamente!")
+            except ValueError as e:
+                print(f"\n[ERROR] {e}")
+                print("\nIntentando con planta de ejemplo (Acacia)...")
+                generar_dashboard_con_datos("Acacia", dias=30, guardar=False)
+        else:
+            print("\nNo se ingreso ningun nombre. Usando planta de ejemplo (Acacia)...")
             generar_dashboard_con_datos("Acacia", dias=30, guardar=False)
     else:
-        print("\nNo se ingreso ningun nombre. Usando planta de ejemplo (Acacia)...")
-        generar_dashboard_con_datos("Acacia", dias=30, guardar=False)
+        # Modo interactivo: bucle para múltiples consultas
+        continuar = True
 
+        while continuar:
+            print("\nEjemplos de plantas disponibles:")
+            print("  - Acacia, Airplant, Alpine Buttercup")
+            print("  - Alumroot, American Globeflower, Angelwing Jasmine")
+            print("  - Aaron's Beard, Absaroka Range Beardtongue")
+            print("\nTip: Tambien puedes usar: python dashboard_plantas.py NombrePlanta [dias] [guardar]")
 
-from typing import Optional
+            # Preguntar nombre de la planta
+            nombre_planta = input("\nIngrese el nombre de la planta que desea visualizar o escriba \"random\": ").strip()
 
-def set_label(label: Optional[str]) -> None:
-    if label is None:
-        label = ""  # normalizar a cadena
-    # ...usar label seguro como str...
+            # Si el usuario escribe "random", seleccionar una planta aleatoria
+            if nombre_planta.lower() == "random":
+                plantas_disponibles = cargar_plantas()
+                if plantas_disponibles:
+                    planta_aleatoria = random.choice(plantas_disponibles)
+                    nombre_planta = planta_aleatoria.nombre
+                    print(f"[*] Planta aleatoria seleccionada: {nombre_planta} ({planta_aleatoria.tipo})")
+                else:
+                    print("Error: No se pudieron cargar las plantas disponibles.")
+                    nombre_planta = ""
+
+            # Preguntar cantidad de días
+            while True:
+                try:
+                    dias_input = input("Ingrese la cantidad de dias de datos a simular (7, 15, 30): ").strip()
+                    if dias_input == "":
+                        dias = 30
+                        break
+                    dias = int(dias_input)
+                    if dias > 0 and dias <= 365:
+                        break
+                    else:
+                        print("Por favor ingrese un valor entre 1 y 365")
+                except ValueError:
+                    print("Por favor ingrese un numero valido")
+
+            # Preguntar si desea guardar
+            guardar_input = input("Desea guardar el dashboard como imagen? (s/n, default: n): ").strip().lower()
+            guardar = guardar_input in ['s', 'si', 'yes', 'y']
+
+            # Generar el dashboard
+            if nombre_planta:
+                try:
+                    # Generar dashboard con datos reales de la planta
+                    print(f"\nGenerando dashboard para '{nombre_planta}' con {dias} dias de datos...")
+                    generar_dashboard_con_datos(nombre_planta, dias=dias, guardar=guardar)
+                    print("\n[OK] Dashboard generado exitosamente!")
+                except ValueError as e:
+                    print(f"\n[ERROR] {e}")
+                    print("\nIntentando con planta de ejemplo (Acacia)...")
+                    generar_dashboard_con_datos("Acacia", dias=30, guardar=False)
+            else:
+                print("\nNo se ingreso ningun nombre. Usando planta de ejemplo (Acacia)...")
+                generar_dashboard_con_datos("Acacia", dias=30, guardar=False)
+
+            # Preguntar si desea hacer otra consulta
+            print("\n" + "="*80)
+            otra_consulta = input("Desea generar otro dashboard? (s/n): ").strip().lower()
+            continuar = otra_consulta in ['s', 'si', 'yes', 'y']
+
+            if not continuar:
+                print("\nGracias por usar el Dashboard de Plantas!")
+                print("="*80)

@@ -55,8 +55,8 @@ def cargar_plantas() -> list[PlantaConfig]:
     directorio_actual = os.path.dirname(os.path.abspath(__file__))
 
     # 2. Construimos la ruta subiendo un nivel (..) para salir de src
-    # Esto busca el archivo en: Traductor de plantas/plantas.json
-    ruta_json = os.path.join(directorio_actual, "..", "plantas.json")
+    # Esto busca el archivo en: Traductor de plantas/data/plantas.json
+    ruta_json = os.path.join(directorio_actual, "..", "data", "plantas.json")
 
     try:
         with open(ruta_json, "r", encoding="utf-8") as f:

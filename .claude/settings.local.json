@@ -13,7 +13,12 @@
       "Bash(../.venv/Scripts/pip install:*)",
       "Bash(../.venv/Scripts/python:*)",
       "Bash(\".venv\\Scripts\\activate.bat\")",
-      "Bash(\".venv\\Scripts\\python.exe\" -c \"import sys; print(sys.prefix)\")"
+      "Bash(\".venv\\Scripts\\python.exe\" -c \"import sys; print(sys.prefix)\")",
+      "Bash(findstr:*)",
+      "Bash(NUL)",
+      "Bash(...venvScriptspython.exe dashboard_plantas.py Acacia 7 false)",
+      "Bash(\"..\\.venv\\Scripts\\python.exe\" dashboard_plantas.py Acacia 7 false)",
+      "Bash(\"../.venv/Scripts/python.exe\" dashboard_plantas.py Acacia 7 false)"
     ],
     "deny": [],
     "ask": []
